@@ -1,14 +1,15 @@
+#!/usr/bin/env python3
+
 from pathlib import Path
 from sys import argv
-from os.path import isfile
-import os
+from os import name as os_name
 from subprocess import run
 from sys import exit
 
 
-def at(values, index, default):
+def arg(index, default):
     try:
-        return values[index]
+        return argv[index]
     except IndexError:
         return default
 
@@ -19,48 +20,55 @@ def parse_size(size: str) -> int:
     return int(float(string[:-2])*units[string[-2:]])
 
 
-ROOT_DIR = Path(at(argv, 1, default='.'))
-MAX_COUNT = int(at(argv, 2, default='20'))
-THRESHOLD = parse_size(at(argv, 3, default='1MB'))
+ROOT_DIR = Path(arg(1, default='.'))
+MAX_COUNT = int(arg(2, default='30'))
+THRESHOLD = parse_size(arg(3, default='100MB'))
 
 
-def sizeof_fmt(num, suffix="B"):
-    for unit in ["", "K", "M", "G", "T", "P", "E", "Z"]:
+def sizeof_fmt(num):
+    for unit in ["", "K", "M", "G"]:
         if abs(num) < 1024.0:
-            return f"{num:7.1f}{unit}{suffix}"
+            return f"{num:7.1f}{unit}B"
         num /= 1024.0
-    return f"{num:7.1f}Yi{suffix}"
+    return f"{num:7.1f}TiB"
 
 
 def clear():
-    if os.name == 'nt':
-        run(['cls'])
+    if os_name == 'nt':
+        run(['cls'])  # or use run?
     else:
         run(['clear'])
 
 
-files = []
+def main():
+    files = []
+
+    for path in ROOT_DIR.glob('**/*'):
+        if not path.is_file():
+            continue
+
+        pair = (path, path.stat().st_size)
+
+        # imp for performance, as skips sorting everytime
+        if pair[1] < THRESHOLD:
+            continue
+
+        # old_files = files
+        files.append(pair)
+        files.sort(key=lambda x: x[1], reverse=True)
+
+        # if old_files[:MAX_COUNT] == files[:MAX_COUNT]:
+        #     continue
+
+        del files[MAX_COUNT:]
+
+        clear()
+        for file, size in files:
+            print(sizeof_fmt(size), ':', file)
+
 
 try:
-    for path in ROOT_DIR.glob('**/*'):
-        if isfile(path):
-            pair = (path, path.stat().st_size)
-
-            if pair[1] < THRESHOLD:
-                continue
-
-            # old_files = files
-            files.insert(0, pair)
-            files.sort(key=lambda x: x[1], reverse=True)
-
-            # if old_files[:MAX_COUNT] == files[:MAX_COUNT]:
-            #     continue
-
-            del files[MAX_COUNT:]
-
-            clear()
-            for file, size in files:
-                print(sizeof_fmt(size), ':', file)
+    main()
 except KeyboardInterrupt:
     print("Exiting...")
     exit(130)
